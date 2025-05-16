@@ -9,7 +9,7 @@ import json
 load_dotenv()
 
 # Configurações da aplicação
-APP_TITLE = "💬 Chat com Claude"
+APP_TITLE = "💬 Chat"
 APP_ICON = "💬"
 APP_DESCRIPTION = "Interface amigável para o Claude Code CLI"
 APP_SECRET_KEY = os.getenv("APP_SECRET_KEY", "default_secret_key")

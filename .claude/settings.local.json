@@ -13,7 +13,9 @@
       "Bash(npm run build:*)",
       "Bash(npm run dev:mock:*)",
       "Bash(./setup.sh:*)",
-      "Bash(claude -p \"Teste\")"
+      "Bash(claude -p \"Teste\")",
+      "Bash(pnpm:*)",
+      "Bash(PORT=8080 pnpm run dev -- --host)"
     ],
     "deny": []
   }
