@@ -1,0 +1,52 @@
+{
+  "conversations": [
+    {
+      "id": 1,
+      "title": "meu nome é Diego",
+      "timestamp": "2025-05-16 21:57:35",
+      "last_updated": "2025-05-16 21:58:05",
+      "messages": [
+        {
+          "role": "user",
+          "content": "meu nome é Diego"
+        },
+        {
+          "role": "assistant",
+          "content": "Olá Diego, como posso ajudar você hoje?"
+        },
+        {
+          "role": "user",
+          "content": "qual é meu nome"
+        },
+        {
+          "role": "assistant",
+          "content": "Diego"
+        },
+        {
+          "role": "user",
+          "content": "eu gosto de morangos"
+        },
+        {
+          "role": "assistant",
+          "content": "Olá Diego! Os morangos são realmente deliciosos. Você tem alguma pergunta específica sobre código ou projeto em que eu possa ajudar?"
+        },
+        {
+          "role": "user",
+          "content": "do que eu gosto?"
+        },
+        {
+          "role": "assistant",
+          "content": "Você gosta de morangos."
+        }
+      ],
+      "session_id": "bd6ae25cf9352b273507925667a98044"
+    }
+  ],
+  "user_info": {
+    "user_name": "Diego",
+    "preferences": {
+      "frutas": "morangos"
+    },
+    "context": {}
+  }
+}
