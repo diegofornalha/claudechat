@@ -1,0 +1,36 @@
+# Arquivos de ambiente
+.env
+.env.local
+.env.*.local
+
+# Arquivos de cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ambiente virtual
+venv/
+env/
+ENV/
+
+# Diretórios e arquivos específicos do Streamlit
+.streamlit/
+.streamlit/secrets.toml
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.log
+
+# Diretórios de IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
