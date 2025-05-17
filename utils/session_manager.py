@@ -18,7 +18,7 @@ from typing import Dict, List, Any, Optional, Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Importar a classe de integração
-from claudechat_integration import ClaudeIntegration
+from claudechat.claudechat_integration import ClaudeIntegration
 
 # Configuração de logging
 logging.basicConfig(

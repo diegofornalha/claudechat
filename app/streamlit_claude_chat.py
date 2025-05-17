@@ -230,6 +230,58 @@ def delete_conversation(conv_index):
     save_history(st.session_state.history_data)
     return True
 
+# Adicionar uma nova função para excluir conversa por arquivo JSONL
+def delete_conversation_file(session_id, jsonl_path):
+    """
+    Exclui uma conversa baseada no arquivo JSONL.
+    Também remove do histórico local se estiver presente.
+    
+    Args:
+        session_id: ID da sessão
+        jsonl_path: Caminho para o arquivo JSONL
+    
+    Returns:
+        bool: True se a exclusão foi bem-sucedida
+    """
+    # Verificar se o arquivo existe
+    if not os.path.exists(jsonl_path):
+        return False
+    
+    try:
+        # Verificar se existe um arquivo todos correspondente
+        todos_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "todos")
+        todos_path = os.path.join(todos_dir, f"{session_id}.json")
+        
+        # Excluir o arquivo JSONL
+        os.remove(jsonl_path)
+        
+        # Excluir o arquivo todos se existir
+        if os.path.exists(todos_path):
+            os.remove(todos_path)
+        
+        # Verificar se a conversa está no histórico local
+        for idx, conv in enumerate(st.session_state.history_data["conversations"]):
+            if conv.get("session_id") == session_id:
+                # Remover do histórico local
+                st.session_state.history_data["conversations"].pop(idx)
+                
+                # Se for a conversa atual, resetar
+                if st.session_state.current_conversation_index == idx:
+                    st.session_state.messages = []
+                    st.session_state.conversation_id = None
+                    st.session_state.current_conversation_index = -1
+                elif st.session_state.current_conversation_index > idx:
+                    st.session_state.current_conversation_index -= 1
+                
+                # Salvar alterações no histórico
+                save_history(st.session_state.history_data)
+                break
+        
+        return True
+    except Exception as e:
+        print(f"Erro ao excluir conversa: {str(e)}")
+        return False
+
 # Função para obter conversas organizadas por projetos
 def get_conversations_by_project():
     """
@@ -409,6 +461,13 @@ with st.sidebar:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Erro ao carregar conversa: {str(e)}")
+                    with col2:
+                        if st.button("🗑️", key=f"del_{project_name}_{i}"):
+                            if delete_conversation_file(conv["session_id"], conv["jsonl_path"]):
+                                st.success(f"Conversa excluída com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("Erro ao excluir conversa")
     
     # Controles para o histórico
     with st.expander("Gerenciar histórico"):
