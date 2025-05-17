@@ -7,6 +7,8 @@ import json
 import datetime
 import hashlib
 from io import BytesIO
+import glob
+from pathlib import Path
 
 # Adicionar o diretório raiz ao PATH para importar corretamente os módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -196,6 +198,115 @@ def save_current_conversation():
     # Salvar o histórico no arquivo
     return save_history(st.session_state.history_data)
 
+# Função para excluir uma conversa específica
+def delete_conversation(conv_index):
+    # Obter o índice original na lista de conversas
+    sorted_conversations = sorted(
+        st.session_state.history_data["conversations"], 
+        key=lambda x: x.get("last_updated", x.get("timestamp", "")), 
+        reverse=True
+    )
+    
+    # Obter a conversa a ser excluída
+    conv_to_delete = sorted_conversations[conv_index]
+    
+    # Encontrar o índice original na lista não ordenada
+    original_index = st.session_state.history_data["conversations"].index(conv_to_delete)
+    
+    # Remover a conversa do histórico
+    st.session_state.history_data["conversations"].pop(original_index)
+    
+    # Se estamos excluindo a conversa atual, resetar para uma nova conversa
+    if st.session_state.current_conversation_index == original_index:
+        st.session_state.messages = []
+        st.session_state.conversation_id = None
+        st.session_state.current_conversation_index = -1
+    
+    # Atualizar índices de conversas que estavam depois da excluída
+    elif st.session_state.current_conversation_index > original_index:
+        st.session_state.current_conversation_index -= 1
+    
+    # Salvar as alterações
+    save_history(st.session_state.history_data)
+    return True
+
+# Função para obter conversas organizadas por projetos
+def get_conversations_by_project():
+    """
+    Retorna um dicionário de conversas organizadas por projeto,
+    baseando-se na estrutura de pastas dos arquivos JSONL
+    """
+    projects_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "projects")
+    
+    # Estrutura para armazenar as conversas por projeto
+    projects = {
+        "Claude Direto": {"path": os.path.join(projects_dir, "-root--claude"), "conversations": []},
+        "Claude Chat": {"path": os.path.join(projects_dir, "-root--claude-claudechat"), "conversations": []},
+        "Claude App": {"path": os.path.join(projects_dir, "-root--claude-claudechat-app"), "conversations": []}
+    }
+    
+    # Para cada projeto, buscar as conversas nos arquivos JSONL
+    for project_name, project_info in projects.items():
+        if os.path.exists(project_info["path"]):
+            jsonl_files = glob.glob(os.path.join(project_info["path"], "*.jsonl"))
+            
+            for jsonl_file in jsonl_files:
+                session_id = os.path.basename(jsonl_file).replace(".jsonl", "")
+                
+                # Ler o arquivo para extrair título e timestamp
+                try:
+                    with open(jsonl_file, 'r', encoding='utf-8') as f:
+                        first_line = f.readline()
+                        if first_line:
+                            try:
+                                first_msg = json.loads(first_line)
+                                # Extrair primeiro conteúdo como título
+                                title = ""
+                                if "message" in first_msg and "content" in first_msg["message"]:
+                                    content = first_msg["message"]["content"]
+                                    if isinstance(content, str):
+                                        title = content.split("\n")[0][:30]
+                                    elif isinstance(content, list) and len(content) > 0:
+                                        for item in content:
+                                            if item.get("type") == "text":
+                                                title = item.get("text", "")[:30]
+                                                break
+                                
+                                # Fallback se não conseguir extrair um título
+                                if not title:
+                                    title = f"Conversa {session_id[:8]}"
+                                
+                                # Extrair timestamp
+                                timestamp = first_msg.get("timestamp", "")
+                                if timestamp:
+                                    try:
+                                        # Converter de ISO para formato legível
+                                        dt = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                                        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                                    except:
+                                        timestamp = "Data desconhecida"
+                                
+                                # Adicionar à lista de conversas do projeto
+                                project_info["conversations"].append({
+                                    "session_id": session_id,
+                                    "title": title,
+                                    "timestamp": timestamp,
+                                    "jsonl_path": jsonl_file
+                                })
+                            except json.JSONDecodeError:
+                                pass
+                except Exception as e:
+                    print(f"Erro ao ler arquivo {jsonl_file}: {str(e)}")
+            
+            # Ordenar conversas do mais recente para o mais antigo
+            project_info["conversations"] = sorted(
+                project_info["conversations"],
+                key=lambda x: x.get("timestamp", ""),
+                reverse=True
+            )
+    
+    return projects
+
 # Exibir mensagens anteriores
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -218,35 +329,86 @@ with st.sidebar:
     st.divider()
     
     # Histórico de conversas
-    st.subheader("Histórico Temporário")
+    st.subheader("Histórico por Projeto")
     
-    # Mostrar conversas salvas
-    if st.session_state.history_data["conversations"]:
-        # Ordenar conversas do mais recente para o mais antigo
-        sorted_conversations = sorted(
-            st.session_state.history_data["conversations"], 
-            key=lambda x: x.get("last_updated", x.get("timestamp", "")), 
-            reverse=True
-        )
-        
-        conversation_options = [f"{i}. {conv['timestamp']} - {conv['title']}" 
-                             for i, conv in enumerate(sorted_conversations)]
-        
-        selected_conversation = st.selectbox(
-            "Conversas anteriores:",
-            options=range(len(sorted_conversations)),
-            format_func=lambda i: conversation_options[i]
-        )
-        
-        if st.button("Carregar conversa"):
-            selected_conv = sorted_conversations[selected_conversation]
-            st.session_state.messages = selected_conv["messages"].copy()
-            
-            # Atualizar o índice da conversa atual
-            original_index = st.session_state.history_data["conversations"].index(selected_conv)
-            st.session_state.current_conversation_index = original_index
-            
-            st.rerun()
+    # Obter conversas organizadas por projeto
+    projects = get_conversations_by_project()
+    
+    # Mostrar cada projeto em um expander
+    for project_name, project_info in projects.items():
+        if project_info["conversations"]:
+            with st.expander(f"{project_name} ({len(project_info['conversations'])} conversas)"):
+                # Renderizar cada conversa com um botão de lixeira
+                for i, conv in enumerate(project_info["conversations"]):
+                    col1, col2 = st.columns([0.9, 0.1])
+                    with col1:
+                        # Usar session_id como chave única para evitar conflitos
+                        if st.button(f"{conv['timestamp']} - {conv['title']}", 
+                                    key=f"proj_{project_name}_{i}"):
+                            # Carregar esta conversa do arquivo JSONL
+                            messages = []
+                            try:
+                                with open(conv["jsonl_path"], 'r', encoding='utf-8') as f:
+                                    for line in f:
+                                        try:
+                                            entry = json.loads(line)
+                                            
+                                            # Extrair role e content
+                                            role = "user"
+                                            content = ""
+                                            
+                                            if "type" in entry and entry["type"] in ["user", "assistant"]:
+                                                role = entry["type"]
+                                            elif "message" in entry and "role" in entry["message"]:
+                                                role = entry["message"]["role"]
+                                            
+                                            if "message" in entry and "content" in entry["message"]:
+                                                content_data = entry["message"]["content"]
+                                                if isinstance(content_data, str):
+                                                    content = content_data
+                                                elif isinstance(content_data, list):
+                                                    # Processar conteúdo em formato de lista
+                                                    for item in content_data:
+                                                        if item.get("type") == "text":
+                                                            content += item.get("text", "")
+                                        
+                                            if role in ["user", "assistant"] and content:
+                                                messages.append({
+                                                    "role": role,
+                                                    "content": content
+                                                })
+                                        except:
+                                            # Ignorar linhas com erro
+                                            pass
+                            
+                                # Atualizar mensagens e outros estados
+                                st.session_state.messages = messages
+                                st.session_state.conversation_id = conv["session_id"]
+                                
+                                # Atualizar conversa atual no histórico local
+                                found = False
+                                for idx, existing_conv in enumerate(st.session_state.history_data["conversations"]):
+                                    if existing_conv.get("session_id") == conv["session_id"]:
+                                        st.session_state.current_conversation_index = idx
+                                        found = True
+                                        break
+                                
+                                if not found:
+                                    # Criar nova entrada no histórico local
+                                    new_conv = {
+                                        "id": len(st.session_state.history_data["conversations"]) + 1,
+                                        "title": conv["title"],
+                                        "timestamp": conv["timestamp"],
+                                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                        "messages": messages,
+                                        "session_id": conv["session_id"]
+                                    }
+                                    st.session_state.history_data["conversations"].append(new_conv)
+                                    st.session_state.current_conversation_index = len(st.session_state.history_data["conversations"]) - 1
+                                
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao carregar conversa: {str(e)}")
     
     # Controles para o histórico
     with st.expander("Gerenciar histórico"):

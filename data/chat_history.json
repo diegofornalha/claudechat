@@ -2,44 +2,28 @@
   "conversations": [
     {
       "id": 1,
-      "title": "meu nome é Diego",
-      "timestamp": "2025-05-16 21:57:35",
-      "last_updated": "2025-05-16 21:58:05",
+      "title": "oi",
+      "timestamp": "2025-05-17 04:10:39",
+      "last_updated": "2025-05-17 04:11:06",
       "messages": [
         {
           "role": "user",
-          "content": "meu nome é Diego"
+          "content": "oi"
         },
         {
           "role": "assistant",
-          "content": "Olá Diego, como posso ajudar você hoje?"
+          "content": "Olá Diego! Como posso ajudar você hoje?"
         },
         {
           "role": "user",
-          "content": "qual é meu nome"
+          "content": "to que se trata esse projeto?"
         },
         {
           "role": "assistant",
-          "content": "Diego"
-        },
-        {
-          "role": "user",
-          "content": "eu gosto de morangos"
-        },
-        {
-          "role": "assistant",
-          "content": "Olá Diego! Os morangos são realmente deliciosos. Você tem alguma pergunta específica sobre código ou projeto em que eu possa ajudar?"
-        },
-        {
-          "role": "user",
-          "content": "do que eu gosto?"
-        },
-        {
-          "role": "assistant",
-          "content": "Você gosta de morangos."
+          "content": "Este projeto é uma aplicação de chat em Streamlit que integra com o Claude. Principais características:\n\n- Interface de conversa em português do Brasil\n- Memória de contexto que lembra nome e preferências do usuário\n- Histórico de conversas que pode ser salvo, visualizado e exportado\n- Efeito de streaming visual das respostas\n- Sistema que detecta automaticamente quando o usuário menciona seu nome ou preferências\n\nA aplicação usa o Streamlit para criar a interface de usuário e se comunica com o Claude através do módulo \"utils.claude_cli\". Permite iniciar novas conversas, continuar conversas anteriores e gerenciar o histórico."
         }
       ],
-      "session_id": "bd6ae25cf9352b273507925667a98044"
+      "session_id": "a8b4cd9695b76d3d210ba91d7834dfb2"
     }
   ],
   "user_info": {

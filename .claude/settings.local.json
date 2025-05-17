@@ -15,7 +15,9 @@
       "Bash(./setup.sh:*)",
       "Bash(claude -p \"Teste\")",
       "Bash(pnpm:*)",
-      "Bash(PORT=8080 pnpm run dev -- --host)"
+      "Bash(PORT=8080 pnpm run dev -- --host)",
+      "Bash(./run.sh:*)",
+      "Bash(./run_chat.sh:*)"
     ],
     "deny": []
   }
