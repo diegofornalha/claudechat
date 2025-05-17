@@ -13,52 +13,15 @@
         {
           "role": "assistant",
           "content": "Olá Diego! Como posso ajudar você hoje?"
-        },
-        {
-          "role": "user",
-          "content": "to que se trata esse projeto?"
-        },
-        {
-          "role": "assistant",
-          "content": "Este projeto é uma aplicação de chat em Streamlit que integra com o Claude. Principais características:\n\n- Interface de conversa em português do Brasil\n- Memória de contexto que lembra nome e preferências do usuário\n- Histórico de conversas que pode ser salvo, visualizado e exportado\n- Efeito de streaming visual das respostas\n- Sistema que detecta automaticamente quando o usuário menciona seu nome ou preferências\n\nA aplicação usa o Streamlit para criar a interface de usuário e se comunica com o Claude através do módulo \"utils.claude_cli\". Permite iniciar novas conversas, continuar conversas anteriores e gerenciar o histórico."
         }
       ],
       "session_id": "a8b4cd9695b76d3d210ba91d7834dfb2"
-    },
-    {
-      "id": 2,
-      "title": "Conversa ec67383d",
-      "timestamp": "",
-      "last_updated": "2025-05-17 05:17:10",
-      "messages": [
-        {
-          "role": "user",
-          "content": "do que se trata esse projeto?"
-        },
-        {
-          "role": "assistant",
-          "content": "Vou analisar os arquivos do projeto para entender do que ele se trata."
-        },
-        {
-          "role": "assistant",
-          "content": "Este projeto é uma interface de chat para o Claude AI em português do Brasil. Trata-se de uma aplicação web construída com Streamlit que permite interagir com o Claude e gerenciar conversas.\n\nPrincipais características:\n- Interface de chat com Streamlit para interagir com o Claude\n- Sistema de gerenciamento de conversas e histórico\n- Integração com o Claude CLI e seus arquivos de sessão JSONL\n- Gerenciamento de tarefas (todos) associadas a conversas\n- Detecção e armazenamento de informações do usuário (nome, preferências)\n- Organização de conversas por projeto\n- Integração com o Statsig para feature flags\n\nA aplicação funciona como uma camada sobre o Claude CLI, permitindo visualizar e continuar conversas existentes, criar novas conversas, e gerenciar tarefas relacionadas às conversas."
-        },
-        {
-          "role": "user",
-          "content": "crie tarefas para investigar mais isso"
-        },
-        {
-          "role": "assistant",
-          "content": "Tarefas criadas para investigação do projeto!"
-        }
-      ],
-      "session_id": "ec67383d-6929-4b69-b7ab-d1a09d497079"
     }
   ],
   "user_info": {
     "user_name": "Diego",
     "preferences": {
-      "frutas": "morangos"
+      "Sempre": "me explicar no detalhe o que você está fazendo"
     },
     "context": {}
   }

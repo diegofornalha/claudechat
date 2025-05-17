@@ -131,31 +131,54 @@ def save_current_conversation():
         
     # Verificar se é uma conversa existente ou nova
     if st.session_state.current_conversation_index >= 0 and st.session_state.current_conversation_index < len(st.session_state.history_data["conversations"]):
-        # Atualizar conversa existente
-        st.session_state.history_data["conversations"][st.session_state.current_conversation_index]["messages"] = st.session_state.messages.copy()
-        st.session_state.history_data["conversations"][st.session_state.current_conversation_index]["last_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Atualizar conversa existente - apenas metadados básicos e primeira/última mensagem
+        conv = st.session_state.history_data["conversations"][st.session_state.current_conversation_index]
+        conv["last_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Guardamos apenas a primeira mensagem de usuário e de assistente para manter o histórico mínimo
+        first_user_msg = next((msg for msg in st.session_state.messages if msg["role"] == "user"), None)
+        first_assistant_msg = next((msg for msg in st.session_state.messages if msg["role"] == "assistant"), None)
+        
+        # Guardar apenas mensagens essenciais
+        minimal_messages = []
+        if first_user_msg:
+            minimal_messages.append(first_user_msg)
+        if first_assistant_msg:
+            minimal_messages.append(first_assistant_msg)
+        
+        conv["messages"] = minimal_messages
     else:
-        # Criar nova conversa
+        # Criar nova conversa (apenas com metadados básicos)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Extrai o primeiro e último mensaje para criar um título
-        first_user_msg = next((msg["content"] for msg in st.session_state.messages if msg["role"] == "user"), "Nova conversa")
-        title = first_user_msg[:30] + "..." if len(first_user_msg) > 30 else first_user_msg
+        # Extrai a primeira mensagem para criar um título
+        first_user_msg = next((msg for msg in st.session_state.messages if msg["role"] == "user"), {"content": "Nova conversa"})
+        title = first_user_msg["content"][:30] + "..." if len(first_user_msg["content"]) > 30 else first_user_msg["content"]
+        
+        # Guardar apenas a primeira mensagem do usuário e a primeira resposta
+        first_assistant_msg = next((msg for msg in st.session_state.messages if msg["role"] == "assistant"), None)
+        minimal_messages = [first_user_msg]
+        if first_assistant_msg:
+            minimal_messages.append(first_assistant_msg)
         
         conversation = {
             "id": len(st.session_state.history_data["conversations"]) + 1,
             "title": title,
             "timestamp": timestamp,
             "last_updated": timestamp,
-            "messages": st.session_state.messages.copy(),
+            "messages": minimal_messages,
             "session_id": st.session_state.session_id
         }
         
         st.session_state.history_data["conversations"].append(conversation)
         st.session_state.current_conversation_index = len(st.session_state.history_data["conversations"]) - 1
     
-    # Atualizar informações do usuário no histórico
-    st.session_state.history_data["user_info"] = st.session_state.memory
+    # Atualizar informações do usuário no histórico (apenas básicas)
+    st.session_state.history_data["user_info"] = {
+        "user_name": st.session_state.memory.get("user_name", None),
+        "preferences": st.session_state.memory.get("preferences", {}),
+        "context": {}
+    }
     
     # Salvar o histórico no arquivo
     return save_history(st.session_state.history_data)
@@ -598,113 +621,115 @@ with st.sidebar:
     # Obter conversas organizadas por projeto
     projects = get_conversations_by_project()
     
+    # Não é mais necessário calcular o total aqui, pois usamos o histórico
+    
     # Mostrar cada projeto em um expander
     for project_name, project_info in projects.items():
         if project_info["conversations"]:
-            with st.expander(f"{project_name} ({len(project_info['conversations'])} conversas)"):
-                # Renderizar cada conversa com um botão de lixeira
+            with st.expander(f"{project_name} ({len(project_info['conversations'])} conversas de {len(st.session_state.history_data['conversations'])} total)"):
+                # Adicionar botão para limpar todas as conversas do projeto como primeira opção
+                if st.button(f"🗑️ Limpar Todas Conversas", key=f"clear_all_{project_name}"):
+                    success = True
+                    # Copiar a lista de conversas para evitar problemas durante a iteração
+                    conversations_to_delete = project_info["conversations"].copy()
+                    
+                    for conv in conversations_to_delete:
+                        # Tentar excluir cada conversa
+                        if not delete_conversation_file(conv["session_id"], conv["jsonl_path"]):
+                            success = False
+                    
+                    if success:
+                        st.success(f"Todas as conversas de {project_name} foram excluídas!")
+                        st.rerun()
+                    else:
+                        st.error(f"Erro ao excluir algumas conversas de {project_name}")
+                
+                # Adicionar um separador visual
+                st.markdown("---")
+                
+                # Renderizar cada conversa dentro de um expander
                 for i, conv in enumerate(project_info["conversations"]):
-                    col1, col2 = st.columns([0.9, 0.1])
-                    with col1:
-                        # Usar session_id como chave única para evitar conflitos
-                        if st.button(f"{conv['timestamp']} - {conv['title']}", 
-                                    key=f"proj_{project_name}_{i}"):
-                            # Carregar esta conversa do arquivo JSONL
-                            messages = []
-                            try:
-                                with open(conv["jsonl_path"], 'r', encoding='utf-8') as f:
-                                    for line in f:
-                                        try:
-                                            entry = json.loads(line)
-                                            
-                                            # Extrair role e content
-                                            role = "user"
-                                            content = ""
-                                            
-                                            if "type" in entry and entry["type"] in ["user", "assistant"]:
-                                                role = entry["type"]
-                                            elif "message" in entry and "role" in entry["message"]:
-                                                role = entry["message"]["role"]
-                                            
-                                            if "message" in entry and "content" in entry["message"]:
-                                                content_data = entry["message"]["content"]
-                                                if isinstance(content_data, str):
-                                                    content = content_data
-                                                elif isinstance(content_data, list):
-                                                    # Processar conteúdo em formato de lista
-                                                    for item in content_data:
-                                                        if item.get("type") == "text":
-                                                            content += item.get("text", "")
-                                            
-                                            if role in ["user", "assistant"] and content:
-                                                messages.append({
-                                                    "role": role,
-                                                    "content": content
-                                                })
-                                        except:
-                                            # Ignorar linhas com erro
-                                            pass
-                                
-                                # Atualizar mensagens e outros estados
-                                st.session_state.messages = messages
-                                st.session_state.conversation_id = conv["session_id"]
-                                
-                                # Atualizar conversa atual no histórico local
-                                found = False
-                                for idx, existing_conv in enumerate(st.session_state.history_data["conversations"]):
-                                    if existing_conv.get("session_id") == conv["session_id"]:
-                                        st.session_state.current_conversation_index = idx
-                                        found = True
-                                        break
-                                
-                                if not found:
-                                    # Criar nova entrada no histórico local
-                                    new_conv = {
-                                        "id": len(st.session_state.history_data["conversations"]) + 1,
-                                        "title": conv["title"],
-                                        "timestamp": conv["timestamp"],
-                                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                        "messages": messages,
-                                        "session_id": conv["session_id"]
-                                    }
-                                    st.session_state.history_data["conversations"].append(new_conv)
-                                    st.session_state.current_conversation_index = len(st.session_state.history_data["conversations"]) - 1
-                                
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao carregar conversa: {str(e)}")
-                    with col2:
-                        if st.button("🗑️", key=f"del_{project_name}_{i}"):
-                            if delete_conversation_file(conv["session_id"], conv["jsonl_path"]):
-                                st.success(f"Conversa excluída com sucesso!")
-                                st.rerun()
-                            else:
-                                st.error("Erro ao excluir conversa")
+                    with st.container():
+                        col1, col2, col3 = st.columns([0.6, 0.3, 0.1])
+                        
+                        with col1:
+                            # Usar session_id como chave única para evitar conflitos
+                            conversation_title = conv['title']
+                            if st.button(f"{conversation_title}", key=f"proj_{project_name}_{i}"):
+                                # Carregar esta conversa do arquivo JSONL
+                                messages = []
+                                try:
+                                    with open(conv["jsonl_path"], 'r', encoding='utf-8') as f:
+                                        for line in f:
+                                            try:
+                                                entry = json.loads(line)
+                                                
+                                                # Extrair role e content
+                                                role = "user"
+                                                content = ""
+                                                
+                                                if "type" in entry and entry["type"] in ["user", "assistant"]:
+                                                    role = entry["type"]
+                                                elif "message" in entry and "role" in entry["message"]:
+                                                    role = entry["message"]["role"]
+                                                
+                                                if "message" in entry and "content" in entry["message"]:
+                                                    content_data = entry["message"]["content"]
+                                                    if isinstance(content_data, str):
+                                                        content = content_data
+                                                    elif isinstance(content_data, list):
+                                                        # Processar conteúdo em formato de lista
+                                                        for item in content_data:
+                                                            if item.get("type") == "text":
+                                                                content += item.get("text", "")
+                                                
+                                                if role in ["user", "assistant"] and content:
+                                                    messages.append({
+                                                        "role": role,
+                                                        "content": content
+                                                    })
+                                            except:
+                                                # Ignorar linhas com erro
+                                                pass
+                                    
+                                    # Atualizar mensagens e outros estados
+                                    st.session_state.messages = messages
+                                    st.session_state.conversation_id = conv["session_id"]
+                                    
+                                    # Atualizar conversa atual no histórico local
+                                    found = False
+                                    for idx, existing_conv in enumerate(st.session_state.history_data["conversations"]):
+                                        if existing_conv.get("session_id") == conv["session_id"]:
+                                            st.session_state.current_conversation_index = idx
+                                            found = True
+                                            break
+                                    
+                                    if not found:
+                                        # Criar nova entrada no histórico local
+                                        new_conv = {
+                                            "id": len(st.session_state.history_data["conversations"]) + 1,
+                                            "title": conv["title"],
+                                            "timestamp": conv["timestamp"],
+                                            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                            "messages": messages,
+                                            "session_id": conv["session_id"]
+                                        }
+                                        st.session_state.history_data["conversations"].append(new_conv)
+                                        st.session_state.current_conversation_index = len(st.session_state.history_data["conversations"]) - 1
+                                    
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao carregar conversa: {str(e)}")
+                        with col2:
+                            st.text(f"{conv['timestamp']}")
+                        with col3:
+                            if st.button("🗑️", key=f"del_{project_name}_{i}", help="Excluir conversa"):
+                                if delete_conversation_file(conv["session_id"], conv["jsonl_path"]):
+                                    st.success(f"Conversa excluída com sucesso!")
+                                    st.rerun()
+                                else:
+                                    st.error("Erro ao excluir conversa")
     
-    # Controles para o histórico
-    with st.expander("Gerenciar histórico"):
-        col1, col2 = st.columns(2)
-        
-        with col2:
-            if st.button("Limpar histórico"):
-                if st.session_state.history_data["conversations"]:
-                    # Manter as preferências do usuário
-                    user_info = st.session_state.history_data["user_info"]
-                    # Resetar o histórico
-                    st.session_state.history_data = {"conversations": [], "user_info": user_info}
-                    save_history(st.session_state.history_data)
-                    st.session_state.current_conversation_index = -1
-                    st.success("Histórico temporário limpo!")
-                    st.rerun()
-        
-        # Exportar histórico
-        if st.session_state.history_data["conversations"]:
-            st.download_button(
-                label="Exportar histórico (JSON)",
-                data=json.dumps(st.session_state.history_data, ensure_ascii=False, indent=2),
-                file_name=f"chat_historico_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
-            )
     
     st.divider()
     
@@ -715,31 +740,32 @@ with st.sidebar:
     if not statsig_files:
         st.info("Nenhum arquivo Statsig encontrado")
     else:
-        st.text(f"Total de arquivos: {len(statsig_files)}")
-        
-        # Botão para limpar todos os arquivos
-        if st.button("Limpar todos os arquivos Statsig"):
-            if clear_all_statsig_files():
-                st.success("Todos os arquivos Statsig foram excluídos!")
-                st.rerun()
-            else:
-                st.error("Erro ao excluir alguns arquivos Statsig")
-        
-        # Listar arquivos com opção de exclusão individual
-        st.markdown("### Arquivos Statsig")
-        for file in statsig_files:
-            col1, col2, col3 = st.columns([0.5, 0.35, 0.15])
-            with col1:
-                st.text(file["name"])
-            with col2:
-                st.text(f"{file['size']} - {file['modified']}")
-            with col3:
-                if st.button("🗑️", key=f"del_statsig_{file['name']}"):
-                    if delete_statsig_file(file["path"]):
-                        st.success(f"Arquivo {file['name']} excluído!")
-                        st.rerun()
-                    else:
-                        st.error(f"Erro ao excluir {file['name']}")
+        # Listar arquivos com opção de exclusão individual em um expander
+        with st.expander(f"Arquivos Statsig ({len(statsig_files)} arquivos)"):
+            # Botão para limpar todos os arquivos como primeira opção dentro do dropdown
+            if st.button("🗑️ Limpar Todos os Statsig", key="clear_all_statsig"):
+                if clear_all_statsig_files():
+                    st.success("Todos os arquivos Statsig foram excluídos!")
+                    st.rerun()
+                else:
+                    st.error("Erro ao excluir alguns arquivos Statsig")
+            
+            # Adicionar um separador visual
+            st.markdown("---")
+            for file in statsig_files:
+                with st.container():
+                    col1, col2, col3 = st.columns([0.5, 0.35, 0.15])
+                    with col1:
+                        st.text(file["name"])
+                    with col2:
+                        st.text(f"{file['size']} - {file['modified']}")
+                    with col3:
+                        if st.button("🗑️", key=f"del_statsig_{file['name']}"):
+                            if delete_statsig_file(file["path"]):
+                                st.success(f"Arquivo {file['name']} excluído!")
+                                st.rerun()
+                            else:
+                                st.error(f"Erro ao excluir {file['name']}")
     
     st.divider()
     
@@ -748,19 +774,26 @@ with st.sidebar:
     As respostas são primeiro obtidas completamente e depois exibidas gradualmente na tela.
     """)
     
-    # Botão para limpar o histórico
-    if st.button("Nova Conversa"):
-        # Se houver uma conversa atual, salvá-la automaticamente
-        if st.session_state.messages:
-            save_current_conversation()
-        
-        # Iniciar nova conversa
-        st.session_state.messages = []
-        st.session_state.conversation_id = None
-        st.session_state.current_conversation_index = -1  # Indicar que é uma nova conversa
-        
-        # Manter a memória do usuário
-        st.rerun()
+    # Botões para nova conversa e atualizar conversa
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Nova Conversa"):
+            # Se houver uma conversa atual, salvá-la automaticamente
+            if st.session_state.messages:
+                save_current_conversation()
+            
+            # Iniciar nova conversa
+            st.session_state.messages = []
+            st.session_state.conversation_id = None
+            st.session_state.current_conversation_index = -1  # Indicar que é uma nova conversa
+            
+            # Manter a memória do usuário
+            st.rerun()
+    
+    with col2:
+        if st.button("Atualizar Conversa"):
+            # Atualizar a página
+            st.rerun()
     
     # Botão para limpar apenas o chat (na barra lateral)
     if st.session_state.conversation_id and st.button("Limpar Chat (Manter Tarefas)", key="sidebar_clear"):

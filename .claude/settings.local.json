@@ -17,7 +17,8 @@
       "Bash(pnpm:*)",
       "Bash(PORT=8080 pnpm run dev -- --host)",
       "Bash(./run.sh:*)",
-      "Bash(./run_chat.sh:*)"
+      "Bash(./run_chat.sh:*)",
+      "mcp__desktop-commander__edit_block"
     ],
     "deny": []
   }
