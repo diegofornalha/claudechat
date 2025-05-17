@@ -6,59 +6,18 @@ import re
 import json
 import datetime
 import hashlib
-from io import BytesIO
 import glob
+from io import BytesIO
 from pathlib import Path
 
 # Adicionar o diretório raiz ao PATH para importar corretamente os módulos
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from utils.claude_cli import send_to_claude
 
-# Configurações da página
-st.set_page_config(
-    page_title="Chat",
-    page_icon="🤖",
-    layout="centered"
-)
-
-# Caminho para o arquivo de histórico
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chat_history.json")
-
-# Garantir que o diretório de dados exista
-os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
-
-# Estilo personalizado
-st.markdown("""
-<style>
-.chat-container {
-    border-radius: 10px;
-    margin-bottom: 10px;
-    padding: 10px;
-}
-.user-message {
-    background-color: #e1f5fe;
-    border-radius: 10px;
-    padding: 10px;
-    margin-bottom: 10px;
-}
-.assistant-message {
-    background-color: #f5f5f5;
-    border-radius: 10px;
-    padding: 10px;
-    margin-bottom: 10px;
-}
-.stTextInput>div>div>input {
-    background-color: white;
-}
-.history-controls {
-    padding: 10px;
-    background-color: #f9f9f9;
-    border-radius: 5px;
-    margin-top: 20px;
-}
-</style>
-""", unsafe_allow_html=True)
+#########################################################
+# DEFINIÇÃO DE TODAS AS FUNÇÕES - INÍCIO
+#########################################################
 
 # Função para carregar o histórico do arquivo JSON
 def load_history():
@@ -80,37 +39,6 @@ def save_history(history_data):
     except Exception as e:
         st.error(f"Erro ao salvar histórico: {str(e)}")
         return False
-
-# Gerar um ID único para a sessão se não existir
-if "session_id" not in st.session_state:
-    st.session_state.session_id = hashlib.md5(str(datetime.datetime.now()).encode()).hexdigest()
-
-# Carregar histórico existente
-if "history_data" not in st.session_state:
-    st.session_state.history_data = load_history()
-
-# Inicializar o dicionário de memória com informações do histórico
-if "memory" not in st.session_state:
-    st.session_state.memory = st.session_state.history_data.get("user_info", {
-        "user_name": None,
-        "preferences": {},
-        "context": {}
-    })
-
-# Inicializar histórico de conversa e informações do usuário na sessão
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "conversation_id" not in st.session_state:
-    st.session_state.conversation_id = None
-
-# Inicializar o indicador de conversa atual
-if "current_conversation_index" not in st.session_state:
-    st.session_state.current_conversation_index = -1  # -1 significa conversa nova
-
-# Título do aplicativo
-st.title("Chat")
-st.markdown("Qual é a sua pergunta hoje?")
 
 # Função para extrair informações do usuário das mensagens
 def extract_user_info(message):
@@ -161,6 +89,40 @@ def build_context():
         context = context.rstrip(", ") + ". "
     
     return context.strip()
+
+# Função para carregar e gerenciar todos
+def load_todos_for_session(session_id):
+    """
+    Carrega as tarefas (todos) associadas a um ID de sessão específico.
+    """
+    todos_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "todos")
+    todos_path = os.path.join(todos_dir, f"{session_id}.json")
+    
+    if os.path.exists(todos_path):
+        try:
+            with open(todos_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Erro ao carregar todos: {str(e)}")
+    
+    return []
+
+# Função para salvar todos para uma sessão
+def save_todos_for_session(session_id, todos):
+    """
+    Salva as tarefas (todos) associadas a um ID de sessão específico.
+    """
+    todos_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "todos")
+    os.makedirs(todos_dir, exist_ok=True)
+    todos_path = os.path.join(todos_dir, f"{session_id}.json")
+    
+    try:
+        with open(todos_path, 'w', encoding='utf-8') as f:
+            json.dump(todos, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar todos: {str(e)}")
+        return False
 
 # Função para salvar a conversa atual no histórico
 def save_current_conversation():
@@ -230,7 +192,7 @@ def delete_conversation(conv_index):
     save_history(st.session_state.history_data)
     return True
 
-# Adicionar uma nova função para excluir conversa por arquivo JSONL
+# Função para excluir uma conversa por arquivo JSONL
 def delete_conversation_file(session_id, jsonl_path):
     """
     Exclui uma conversa baseada no arquivo JSONL.
@@ -249,7 +211,7 @@ def delete_conversation_file(session_id, jsonl_path):
     
     try:
         # Verificar se existe um arquivo todos correspondente
-        todos_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "todos")
+        todos_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "todos")
         todos_path = os.path.join(todos_dir, f"{session_id}.json")
         
         # Excluir o arquivo JSONL
@@ -288,7 +250,7 @@ def get_conversations_by_project():
     Retorna um dicionário de conversas organizadas por projeto,
     baseando-se na estrutura de pastas dos arquivos JSONL
     """
-    projects_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "projects")
+    projects_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "projects")
     
     # Estrutura para armazenar as conversas por projeto
     projects = {
@@ -359,6 +321,256 @@ def get_conversations_by_project():
     
     return projects
 
+# Função para listar arquivos Statsig
+def list_statsig_files():
+    """
+    Lista todos os arquivos do diretório Statsig
+    """
+    statsig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "statsig")
+    if not os.path.exists(statsig_dir):
+        return []
+    
+    files = []
+    for file in os.listdir(statsig_dir):
+        file_path = os.path.join(statsig_dir, file)
+        if os.path.isfile(file_path):
+            # Obter tamanho do arquivo
+            size_bytes = os.path.getsize(file_path)
+            if size_bytes < 1024:
+                size_str = f"{size_bytes} B"
+            elif size_bytes < 1024 * 1024:
+                size_str = f"{size_bytes/1024:.1f} KB"
+            else:
+                size_str = f"{size_bytes/(1024*1024):.1f} MB"
+            
+            # Obter data de modificação
+            mod_time = os.path.getmtime(file_path)
+            mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
+            
+            files.append({
+                "name": file,
+                "path": file_path,
+                "size": size_str,
+                "modified": mod_time_str
+            })
+    
+    # Ordenar por data de modificação (mais recente primeiro)
+    return sorted(files, key=lambda x: x["modified"], reverse=True)
+
+# Função para excluir arquivo Statsig
+def delete_statsig_file(file_path):
+    """
+    Exclui um arquivo Statsig específico
+    """
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao excluir arquivo Statsig: {str(e)}")
+        return False
+
+# Função para limpar todos os arquivos Statsig
+def clear_all_statsig_files():
+    """
+    Exclui todos os arquivos do diretório Statsig
+    """
+    statsig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "statsig")
+    if not os.path.exists(statsig_dir):
+        return True
+    
+    success = True
+    for file in os.listdir(statsig_dir):
+        file_path = os.path.join(statsig_dir, file)
+        if os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Erro ao excluir arquivo {file}: {str(e)}")
+                success = False
+    
+    return success
+
+#########################################################
+# DEFINIÇÃO DE TODAS AS FUNÇÕES - FIM
+#########################################################
+
+# Configurações da página
+st.set_page_config(
+    page_title="Chat",
+    page_icon="🤖",
+    layout="centered"
+)
+
+# Caminho para o arquivo de histórico
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "chat_history.json")
+
+# Garantir que o diretório de dados exista
+os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+
+# Estilo personalizado
+st.markdown("""
+<style>
+.chat-container {
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 10px;
+}
+.user-message {
+    background-color: #e1f5fe;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.assistant-message {
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.stTextInput>div>div>input {
+    background-color: white;
+}
+.history-controls {
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+.conversation-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.conversation-item {
+    flex-grow: 1;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+}
+.conversation-item:hover {
+    background-color: #f0f0f0;
+}
+.delete-btn {
+    color: #ff4b4b;
+    cursor: pointer;
+    margin-left: 5px;
+}
+.delete-btn:hover {
+    color: #ff0000;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Gerar um ID único para a sessão se não existir
+if "session_id" not in st.session_state:
+    st.session_state.session_id = hashlib.md5(str(datetime.datetime.now()).encode()).hexdigest()
+
+# Carregar histórico existente
+if "history_data" not in st.session_state:
+    st.session_state.history_data = load_history()
+
+# Inicializar o dicionário de memória com informações do histórico
+if "memory" not in st.session_state:
+    st.session_state.memory = st.session_state.history_data.get("user_info", {
+        "user_name": None,
+        "preferences": {},
+        "context": {}
+    })
+
+# Inicializar histórico de conversa e informações do usuário na sessão
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = None
+
+# Inicializar o indicador de conversa atual
+if "current_conversation_index" not in st.session_state:
+    st.session_state.current_conversation_index = -1  # -1 significa conversa nova
+
+# Título do aplicativo
+st.title("Chat")
+st.markdown("Qual é a sua pergunta hoje?")
+
+# Adicionar seção de todos se tiver uma conversa atual
+if st.session_state.conversation_id:
+    # Carregar todos para a sessão atual
+    todos = load_todos_for_session(st.session_state.conversation_id)
+    
+    if todos:
+        with st.expander("Tarefas da Conversa"):
+            st.markdown("### Lista de Tarefas")
+            
+            # Criar colunas para conteúdo, status e ações
+            for i, todo in enumerate(todos):
+                col1, col2, col3, col4 = st.columns([0.6, 0.15, 0.15, 0.1])
+                
+                with col1:
+                    content = st.text_input("", value=todo["content"], key=f"todo_content_{i}")
+                    todos[i]["content"] = content
+                
+                with col2:
+                    status_options = ["pending", "in_progress", "completed"]
+                    status_index = status_options.index(todo["status"]) if todo["status"] in status_options else 0
+                    status = st.selectbox("", status_options, index=status_index, format_func=lambda x: x.replace("_", " ").title(), key=f"todo_status_{i}")
+                    todos[i]["status"] = status
+                
+                with col3:
+                    priority_options = ["low", "medium", "high"]
+                    priority_index = priority_options.index(todo["priority"]) if todo["priority"] in priority_options else 1
+                    priority = st.selectbox("", priority_options, index=priority_index, format_func=lambda x: x.title(), key=f"todo_priority_{i}")
+                    todos[i]["priority"] = priority
+                
+                with col4:
+                    if st.button("🗑️", key=f"todo_delete_{i}"):
+                        todos.pop(i)
+                        save_todos_for_session(st.session_state.conversation_id, todos)
+                        st.rerun()
+            
+            # Adicionar nova tarefa
+            st.markdown("### Adicionar Nova Tarefa")
+            with st.form("add_todo", clear_on_submit=True):
+                todo_content = st.text_input("Descrição da tarefa")
+                cols = st.columns(2)
+                with cols[0]:
+                    todo_status = st.selectbox("Status", ["pending", "in_progress", "completed"], format_func=lambda x: x.replace("_", " ").title())
+                with cols[1]:
+                    todo_priority = st.selectbox("Prioridade", ["low", "medium", "high"], index=1, format_func=lambda x: x.title())
+                
+                if st.form_submit_button("Adicionar"):
+                    if todo_content:
+                        new_todo = {
+                            "content": todo_content,
+                            "status": todo_status,
+                            "priority": todo_priority,
+                            "id": str(len(todos) + 1)
+                        }
+                        todos.append(new_todo)
+                        save_todos_for_session(st.session_state.conversation_id, todos)
+                        st.rerun()
+            
+            # Salvar alterações
+            if st.button("Salvar Alterações"):
+                save_todos_for_session(st.session_state.conversation_id, todos)
+                st.success("Tarefas atualizadas com sucesso!")
+            
+            # Botão para limpar chat mantendo tarefas
+            if st.button("Limpar Chat (Manter Tarefas)"):
+                # Salvar histórico atual primeiro para garantir que tudo está salvo
+                save_current_conversation()
+                
+                # Limpar apenas as mensagens, mantendo o ID da conversa
+                st.session_state.messages = []
+                
+                # Manter o mesmo ID de conversa e índice
+                # Isso garante que as tarefas continuem associadas
+                
+                # Exibir confirmação
+                st.success("Chat limpo, tarefas mantidas!")
+                st.rerun()
+
 # Exibir mensagens anteriores
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -423,7 +635,7 @@ with st.sidebar:
                                                     for item in content_data:
                                                         if item.get("type") == "text":
                                                             content += item.get("text", "")
-                                        
+                                            
                                             if role in ["user", "assistant"] and content:
                                                 messages.append({
                                                     "role": role,
@@ -432,7 +644,7 @@ with st.sidebar:
                                         except:
                                             # Ignorar linhas com erro
                                             pass
-                            
+                                
                                 # Atualizar mensagens e outros estados
                                 st.session_state.messages = messages
                                 st.session_state.conversation_id = conv["session_id"]
@@ -496,6 +708,41 @@ with st.sidebar:
     
     st.divider()
     
+    # Gerenciar arquivos Statsig
+    st.subheader("Gerenciar Statsig")
+    
+    statsig_files = list_statsig_files()
+    if not statsig_files:
+        st.info("Nenhum arquivo Statsig encontrado")
+    else:
+        st.text(f"Total de arquivos: {len(statsig_files)}")
+        
+        # Botão para limpar todos os arquivos
+        if st.button("Limpar todos os arquivos Statsig"):
+            if clear_all_statsig_files():
+                st.success("Todos os arquivos Statsig foram excluídos!")
+                st.rerun()
+            else:
+                st.error("Erro ao excluir alguns arquivos Statsig")
+        
+        # Listar arquivos com opção de exclusão individual
+        st.markdown("### Arquivos Statsig")
+        for file in statsig_files:
+            col1, col2, col3 = st.columns([0.5, 0.35, 0.15])
+            with col1:
+                st.text(file["name"])
+            with col2:
+                st.text(f"{file['size']} - {file['modified']}")
+            with col3:
+                if st.button("🗑️", key=f"del_statsig_{file['name']}"):
+                    if delete_statsig_file(file["path"]):
+                        st.success(f"Arquivo {file['name']} excluído!")
+                        st.rerun()
+                    else:
+                        st.error(f"Erro ao excluir {file['name']}")
+    
+    st.divider()
+    
     st.subheader("Sobre")
     st.markdown("""
     As respostas são primeiro obtidas completamente e depois exibidas gradualmente na tela.
@@ -513,6 +760,17 @@ with st.sidebar:
         st.session_state.current_conversation_index = -1  # Indicar que é uma nova conversa
         
         # Manter a memória do usuário
+        st.rerun()
+    
+    # Botão para limpar apenas o chat (na barra lateral)
+    if st.session_state.conversation_id and st.button("Limpar Chat (Manter Tarefas)", key="sidebar_clear"):
+        # Salvar histórico atual primeiro
+        save_current_conversation()
+        
+        # Limpar apenas as mensagens, mantendo o ID da conversa e tarefas
+        st.session_state.messages = []
+        
+        st.success("Chat limpo! As tarefas foram mantidas.")
         st.rerun()
 
 # Input do usuário
